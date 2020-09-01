@@ -1,0 +1,17 @@
+{
+  "name": "cocos-creator-sprite-convert-atlas",
+  "version": "1.0.0",
+  "description": "1. 有新的固定资源导入时，请重新另打一张图集\r 2. 需要调用更改的图片资源请放入 modify texture",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "gulp": "^4.0.2"
+  },
+  "dependencies": {
+    "globby": "^11.0.1"
+  }
+}
