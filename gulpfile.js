@@ -2,7 +2,8 @@ const { series, parallel } = require('gulp');
 const globby = require('globby');
 const fs = require('fs');
 
-const txtPath = 'C:/UnityWork/jump/client/cocos_client/assets/res/';
+// modify path
+const txtPath = ['C:/UnityWork/jump/client/cocos_client/assets/res/standTextures', 'C:/UnityWork/jump/client/cocos_client/assets/res/modifyTexture'];
 const prefabPath = 'C:/UnityWork/jump/client/cocos_client/assets/res/prefabs'
 const plistPath = 'C:/UnityWork/jump/client/cocos_client/assets/resources/atlas';
 
@@ -16,13 +17,8 @@ let prefabDatas = [];
 let plistDatas = [];
 
 // texture
-function global (done) {
-
-    done();
-}
-
 function initMeta (done) {
-    var rawPath = globby.sync(txtPath + 'standTextures', {
+    var rawPath = globby.sync(txtPath + '', {
         expandDirectories: {
             files: ['**/*'],
             extensions: ['png.meta']
@@ -44,7 +40,6 @@ function initMeta (done) {
         metaDatas.push(tmp);
     });
     
-
     done();
 }
 
@@ -63,18 +58,22 @@ function initPrefabs(done) {
 
         let parse = JSON.parse(data);
         let tmp = new prefabObj();
+        tmp.path = path;
+        tmp.rawData = parse;
         tmp.name = parse[1]['_name'];
-        tmp.uuids = [];
+        tmp.oldUUids = [];
+        tmp.newSprites = [];
 
         for (let i = 0; i < parse.length; i++) {
             let d = parse[i];
-            if (d['__type__'] === 'cc.Sprite') {
+            if (d['__type__'] === 'cc.Sprite' && !d['_atlas']) {
                 // console.log(parse[1]['_name']);
-                tmp.uuids.push(d['_spriteFrame']['__uuid__']);
+                tmp.oldUUids.push(d['_spriteFrame']['__uuid__']);
             }
         }
-        
-        prefabDatas.push(tmp);
+
+        if (tmp.oldUUids.length > 0)
+            prefabDatas.push(tmp);
     });
 
     done();
@@ -94,15 +93,16 @@ function initPlist (done) {
         });
 
         let parse = JSON.parse(data);
-
         let plistData = Object.getOwnPropertyNames(parse.subMetas);
         let plist = new plistObj();
-        plist.uuid = plistData.uuid;
+        plist.uuid = parse.uuid;
+        plist.sprites = [];
 
         for (let i = 0; i < plistData.length; i++) {
             let tmp = new Object();
             tmp.name = plistData[i];
             tmp.uuid = parse.subMetas[plistData[i]].uuid;
+            plist.sprites.push(tmp);
         }
 
         plistDatas.push(plist);
@@ -111,27 +111,78 @@ function initPlist (done) {
     done();
 }
 
+// remember // "_atlas": null,
 function convert (done) {
-
     // 数据测试 meta
-    let block1 = prefabDatas[0];
-    
-    for (let i = 0; i < block1.uuids.length; i++) {
-        let oldUUid = block1.uuids[i];
+    // let block1 = prefabDatas[0];
 
-        
+    for (let i = 0; i < prefabDatas.length; i++) {
+        let prefab = prefabDatas[i];
+        if (convertData(prefab))
+            writeData(prefab);
     }
-
-    metaDatas.forEach(meta => {
-
-    });
-    
-    plistDatas.forEach(plist => {
-
-    });
 
     done();
 }
 
+function convertData (prefab) {
+    for (let i = 0; i < prefab.oldUUids.length; i++) {
+        let oldUUid = prefab.oldUUids[i];
+        
+        for (let j = 0; j < metaDatas.length; j++) {
+            let meta = metaDatas[j];
+            if (meta.uuid === oldUUid) {
+                // 从名称中查找对应的 texture 数据
+                for (let m = 0; m < plistDatas.length; m ++) {
+                    let plist = plistDatas[m];
+                    for (let n = 0; n < plist.sprites.length; n++) {
+                        let sprite = plist.sprites[n];
+                        // 若 plist sprite 的 name 中包含 meta 的 name，表示是同一张图，那么记录对应的 atlas uuid 以及 texture 的 uuid
+                        if (sprite.name.includes(meta.name)) {
+                            let t = new Object();
+                            t.uuid = sprite.uuid;
+                            t.atlasUUid = plist.uuid;
+                            t.oldUUid = oldUUid;
+                            prefab.newSprites.push(t);
+                        }
+                    }
+                }
 
-exports.default = series(global, initMeta, initPrefabs, initPlist, convert);
+                break;
+            }
+        }
+    }
+
+    if (prefab.newSprites.length <= 0) {
+        console.error(`警告数据丢失：${ prefab.name }`);
+        return false;
+    }
+    
+    try {
+        for (let i = 0; i < prefab.newSprites.length; i++) {
+            let sprite = prefab.newSprites[i];
+            let oldId = sprite.oldUUid;
+            for (let i = 0; i < prefab.rawData.length; i++) {
+                let d = prefab.rawData[i];
+                if (d['__type__'] === 'cc.Sprite' && d['_spriteFrame']['__uuid__'] === oldId) {
+                    d['_spriteFrame']['__uuid__'] = sprite.uuid;
+                    d['_atlas'] = {
+                        __uuid__: sprite.atlasUUid
+                    };
+                }
+            }
+        }
+    }
+    catch (err) {
+        console.error(err);
+        return false; 
+    }
+
+    return true;
+}
+
+function writeData (prefab) {
+    fs.writeFileSync(prefab.path, JSON.stringify(prefab.rawData));
+}
+
+exports.default = series(initMeta, initPrefabs, initPlist, convert);
