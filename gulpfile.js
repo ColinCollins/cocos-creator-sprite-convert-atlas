@@ -3,9 +3,9 @@ const globby = require('globby');
 const fs = require('fs');
 
 // modify path
-const txtPath = ['C:/UnityWork/jump/client/cocos_client/assets/res/standTextures', 'C:/UnityWork/jump/client/cocos_client/assets/res/modifyTexture'];
-const prefabPath = 'C:/UnityWork/jump/client/cocos_client/assets/res/prefabs'
-const plistPath = 'C:/UnityWork/jump/client/cocos_client/assets/resources/atlas';
+const txtPath = ['C:/UnityWork/jump/client/cocos_client/assets/res/standTextures', 'C:/UnityWork/jump/client/cocos_client/assets/res/modifyTextures'];
+const prefabPath = ['C:/UnityWork/jump/client/cocos_client/assets/res/prefabs', 'C:/UnityWork/jump/client/cocos_client/assets/sources'];
+const plistPath = ['C:/UnityWork/jump/client/cocos_client/assets/resources/atlas'];
 
 // object
 function metaObj () {}
@@ -18,12 +18,18 @@ let plistDatas = [];
 
 // texture
 function initMeta (done) {
-    var rawPath = globby.sync(txtPath + '', {
-        expandDirectories: {
-            files: ['**/*'],
-            extensions: ['png.meta']
-        }
-    });
+
+    let rawPath = [];
+    for (let i = 0; i < txtPath.length; i++) {
+        let ps = globby.sync(txtPath[i] + '', {
+            expandDirectories: {
+                files: ['**/*'],
+                extensions: ['png.meta']
+            }
+        });
+
+        rawPath = rawPath.concat(ps);
+    }
 
     rawPath.forEach(path => {
         var data = fs.readFileSync(path, {
@@ -42,14 +48,19 @@ function initMeta (done) {
     
     done();
 }
-
+// prefab
 function initPrefabs(done) {
-    var rawPath = globby.sync(prefabPath, {
-        expandDirectories: {
-            files: ['**/*'],
-            extensions: ['prefab']
-        }
-    });
+    let rawPath = [];
+    for (let i = 0; i < prefabPath.length; i++) {
+        let ps = globby.sync(prefabPath[i], {
+            expandDirectories: {
+                files: ['**/*'],
+                extensions: ['prefab']
+            }
+        });
+
+        rawPath = rawPath.concat(ps);
+    }
 
     rawPath.forEach(path => {
         var data = fs.readFileSync(path, {
@@ -68,7 +79,9 @@ function initPrefabs(done) {
             let d = parse[i];
             if (d['__type__'] === 'cc.Sprite' && !d['_atlas']) {
                 // console.log(parse[1]['_name']);
-                tmp.oldUUids.push(d['_spriteFrame']['__uuid__']);
+                // 判断 spriteFream 为空的时候就不传入
+                if(d['_spriteFrame'])
+                    tmp.oldUUids.push(d['_spriteFrame']['__uuid__']);
             }
         }
 
@@ -79,13 +92,19 @@ function initPrefabs(done) {
     done();
 }
 
+// Plist
 function initPlist (done) {
-    var rawPath = globby.sync(plistPath, {
-        expandDirectories: {
-            files: ['**/*'],
-            extensions: ['plist.meta']
-        }
-    });
+    let rawPath = [];
+    for (let i = 0; i < plistPath.length; i++) {
+        let ps =  globby.sync(plistPath[i], {
+            expandDirectories: {
+                files: ['**/*'],
+                extensions: ['plist.meta']
+            }
+        });
+
+        rawPath = rawPath.concat(ps);
+    }
 
     rawPath.forEach(path => {
         var data = fs.readFileSync(path, {
@@ -164,7 +183,7 @@ function convertData (prefab) {
             let oldId = sprite.oldUUid;
             for (let i = 0; i < prefab.rawData.length; i++) {
                 let d = prefab.rawData[i];
-                if (d['__type__'] === 'cc.Sprite' && d['_spriteFrame']['__uuid__'] === oldId) {
+                if (d['__type__'] === 'cc.Sprite' && d['_spriteFrame'] && d['_spriteFrame']['__uuid__'] === oldId) {
                     d['_spriteFrame']['__uuid__'] = sprite.uuid;
                     d['_atlas'] = {
                         __uuid__: sprite.atlasUUid
